@@ -1,63 +1,57 @@
-name: Update Proxies
-
-permissions:
-  contents: write
+name: Proxy Updater
 
 on:
-  push:
-    branches:
-      - main
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '*/10 * * * *'  # every 10 minutes
   workflow_dispatch:
 
 jobs:
-  update:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out the repo
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Fetch raw lists
+      - name: Download https proxies
+        run: curl -o raw_https.txt https://raw.githubusercontent.com/zloi-user/hideip.me/refs/heads/master/https.txt
+
+      - name: Download connect proxies
+        run: curl -o raw_connect.txt https://raw.githubusercontent.com/zloi-user/hideip.me/refs/heads/master/connect.txt
+
+      - name: Process proxies
         run: |
-          # Download both files
-          curl -s "https://raw.githubusercontent.com/zloi-user/hideip.me/refs/heads/master/https.txt" > raw.txt
-          curl -s "https://raw.githubusercontent.com/zloi-user/hideip.me/refs/heads/master/connect.txt" > raw-connect.txt
+          # Clean old country files but keep raw files and proxies.txt
+          find . -maxdepth 1 -type f -name "*.txt" -not -name "raw_*.txt" -not -name "proxies.txt" -delete
 
-      - name: Build combined proxies.txt
-        run: |
-          awk -F':' '{
-            country=toupper($3); gsub(/ /,"-",country);
-            print "http://" $1 ":" $2 "/#" country "1";
-          }' raw.txt > proxies.txt
+          # Merge both raw files
+          cat raw_https.txt raw_connect.txt > combined_raw.txt
 
-      - name: Build @@@ file from connect.txt
-        run: |
-          awk -F':' '{
-            country=toupper($3); gsub(/ /,"-",country);
-            print "http://" $1 ":" $2 "/#" country "1";
-          }' raw-connect.txt > "@@@"
+          # Generate proxies.txt
+          awk -F':' '{ printf "http://%s:%s/#%s\n", $1, $2, toupper(gensub(/ /,"","g",$3)) NR }' combined_raw.txt > proxies.txt
 
-      - name: Split out per-country files
-        shell: bash
-        run: |
-          find . -maxdepth 1 -type f -name "*.txt" ! -name raw.txt ! -name proxies.txt ! -name raw-connect.txt ! -name "@@@" -delete || true
-
+          # Split by country into country.txt files
           awk -F':' '
-          BEGIN { OFS=""; }
-          {
-            tag = toupper($3); gsub(/ /, "-", tag);
-            fname = tolower($3); gsub(/ /, "-", fname); fname = fname ".txt";
-            count[tag]++;
-            print "http://"$1":"$2"/#"tag count[tag] >> fname;
-          }
-          ' raw.txt
+            {
+              country=tolower($3)
+              gsub(/ /, "-", country)
+              count[country]++
+              printf "http://%s:%s/#%s%d\n", $1, $2, toupper(country), count[country] >> country ".txt"
+            }
+          ' combined_raw.txt
 
-      - name: Commit & push changes
+      - name: Generate PAC files
+        run: |
+          for file in *.txt; do
+            [[ "$file" == raw_* || "$file" == "proxies.txt" ]] && continue
+            country="${file%.txt}"
+            pacfile="${country}.pac"
+            echo "var _0x2197=['...your_obfuscated_content_here...']; function FindProxyForURL(u,h){return 'PROXY example.com:8080';}" > "$pacfile"
+          done
+
+      - name: Commit and push changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add proxies.txt
-          git add "@@@"
-          git add *.txt
-          git diff --cached --quiet || (git commit -m "Automated update of proxies (combined + per-country + @@@)" && git push)
+          git add .
+          git commit -m "Updated proxies and PAC files" || exit 0
+          git push
