@@ -5,11 +5,14 @@ permissions:
   contents: write
 
 on:
+  # Run on every push to main (for instant testing)
   push:
     branches:
       - main
+  # Also run every 10 minutes
   schedule:
     - cron: '*/10 * * * *'
+  # Manual trigger
   workflow_dispatch:
 
 jobs:
@@ -27,31 +30,34 @@ jobs:
 
       - name: Build combined proxies.txt
         run: |
-          # same formatting as before
           awk -F':' '{
             country=toupper($3); gsub(/ /,"-",country);
-            print "http://"$1":"$2"/#" country "1";
+            print "http://" $1 ":" $2 "/#" country "1";
           }' raw.txt > proxies.txt
           echo "---- proxies.txt ----"
           cat proxies.txt
 
       - name: Split out per-country files
+        shell: bash
         run: |
-          # remove any old country files
-          rm -f *.txt
-          # for each line, increment counter and append to country file
-          awk -F':' '
-          {
-            # normalize country name
-            c = toupper($3); gsub(/ /,"-",c);
-            # build filename in lowercase, hyphens for spaces
-            f = tolower($3); gsub(/ /,"-",f); f = f".txt";
-            # increment per-country count
-            count[c]++;
-            # emit with incremental #COUNTRYn
-            print "http://"$1":"$2"/#"c count[c] >> f;
-          }
-          ' raw.txt
+          # Remove old country files, but keep raw.txt and proxies.txt
+          for f in *.txt; do
+            if [[ "$f" != "raw.txt" && "$f" != "proxies.txt" ]]; then
+              rm "$f"
+            fi
+          done
+
+          # Initialize associative array for counts
+          declare -A count
+
+          # Read each line and append to its country file with incremented tag
+          while IFS=':' read -r ip port country; do
+            tag=$(echo "$country" | tr '[:lower:] ' '[:upper:]-')
+            file=$(echo "$country" | tr '[:upper:] ' '[:lower:]-').txt
+            ((count[$tag]++))
+            echo "http://${ip}:${port}/#${tag}${count[$tag]}" >> "$file"
+          done < raw.txt
+
           echo "---- generated country files ----"
           ls *.txt
 
@@ -59,9 +65,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # add raw.txt so we can inspect it (optional)
-          git add raw.txt
           git add proxies.txt
+          # Add all country files (e.g. singapore.txt, france.txt, etc.)
           git add *.txt
-          git diff --cached --quiet || \
-            (git commit -m "Automated update of proxies (combined + per-country)" && git push)
+          git diff --cached --quiet || (git commit -m "Automated update of proxies (combined + per-country)" && git push)
