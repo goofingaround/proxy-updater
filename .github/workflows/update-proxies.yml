@@ -1,5 +1,9 @@
 name: Update Proxies
 
+# Grant the workflow permission to commit & push back to the repo
+permissions:
+  contents: write
+
 on:
   # Run on every push to main (so you can test instantly)
   push:
