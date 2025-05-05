@@ -41,17 +41,11 @@ jobs:
         shell: bash
         run: |
           # Remove old country files, but keep raw.txt and proxies.txt
-          for f in *.txt; do
-            if [[ "$f" != "raw.txt" && "$f" != "proxies.txt" ]]; then
-              rm "$f"
-            fi
-          done
+          find . -maxdepth 1 -type f -name "*.txt" ! -name "raw.txt" ! -name "proxies.txt" -delete
 
-          # Initialize associative array for counts
-          declare -A count
-
-          # Read each line and append to its country file with incremented tag
+          declare -A count=()
           while IFS=':' read -r ip port country; do
+            # Prepare uppercase tag and lowercase filename
             tag=$(echo "$country" | tr '[:lower:] ' '[:upper:]-')
             file=$(echo "$country" | tr '[:upper:] ' '[:lower:]-').txt
             ((count[$tag]++))
@@ -66,6 +60,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add proxies.txt
-          # Add all country files (e.g. singapore.txt, france.txt, etc.)
           git add *.txt
           git diff --cached --quiet || (git commit -m "Automated update of proxies (combined + per-country)" && git push)
