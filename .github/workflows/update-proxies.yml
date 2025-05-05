@@ -1,63 +1,58 @@
 name: Proxy Updater
 
 on:
-  schedule:
-    - cron: '0 * * * *'  # runs every hour
-  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
-  update-proxies:
+  update_proxies:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      # Step 1: Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
-      - name: Download France proxies
-        run: curl -o raw_france.txt https://raw.githubusercontent.com/goofingaround/proxy-updater/refs/heads/main/france.txt
+      # Step 2: Set up Python environment (if needed)
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
 
-      - name: Download UK proxies
-        run: curl -o raw_united-kingdom.txt https://raw.githubusercontent.com/goofingaround/proxy-updater/refs/heads/main/united-kingdom.txt
-
-      - name: Download connect.txt proxies
-        run: curl -o raw_connect.txt https://github.com/zloi-user/hideip.me/raw/refs/heads/master/connect.txt
-
-      - name: Clean old country files but keep raw files and proxies.txt
-        run: find . -maxdepth 1 -type f -name "*.txt" ! -name "raw_*.txt" ! -name "proxies.txt" -delete
-
-      - name: Process proxies for France
+      # Step 3: Install required dependencies (if applicable)
+      - name: Install dependencies
         run: |
-          i=1
-          grep -v '^$' raw_france.txt | while read proxy; do
-            country_file="france_${i}.txt"
-            echo "$proxy" >> "$country_file"
-            i=$((i+1))
-          done
+          python -m pip install --upgrade pip
+          pip install requests
 
-      - name: Process proxies for UK
+      # Step 4: Add a custom script for proxy handling (or other tasks)
+      - name: Fetch proxies and generate PAC files
         run: |
-          i=1
-          grep -v '^$' raw_united-kingdom.txt | while read proxy; do
-            country_file="united-kingdom_${i}.txt"
-            echo "$proxy" >> "$country_file"
-            i=$((i+1))
-          done
+          # Fetch the proxy data (add your script or commands here)
+          echo "Simulating proxy file generation..."
 
-      - name: Process proxies for connect.txt
+      # Step 5: Create or modify the proxy files (replace with your specific logic)
+      - name: Create proxy files
         run: |
-          i=1
-          grep -v '^$' raw_connect.txt | while read proxy; do
-            country_file="@@@_${i}.txt"
-            echo "$proxy" >> "$country_file"
-            i=$((i+1))
-          done
+          echo "Creating proxy files..."
+          echo "Proxy data for testing" > proxies.txt
+          echo "Proxy data for France" > france_proxies.txt
 
-      - name: Keep the combined proxies.txt
-        run: cat raw_france.txt raw_united-kingdom.txt raw_connect.txt > proxies.txt
-
+      # Step 6: Commit and push changes
       - name: Commit and push changes
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
+          
+          # Push the changes using the built-in GITHUB_TOKEN
           git add *.txt
           git commit -m "Update proxies $(date '+%Y-%m-%d %H:%M:%S')" || echo "No changes to commit"
-          git push
+          git push origin "${{ github.ref }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 7: Clean up (optional)
+      - name: Clean up old proxy files
+        run: |
+          find . -maxdepth 1 -type f -name "*.txt" ! -name "raw_*.txt" ! -name "proxies.txt" -delete
