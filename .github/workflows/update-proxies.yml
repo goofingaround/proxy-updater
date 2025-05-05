@@ -22,7 +22,7 @@ jobs:
         run: curl -o raw_connect.txt https://github.com/zloi-user/hideip.me/raw/refs/heads/master/connect.txt
 
       - name: Clean old country files but keep raw files and proxies.txt
-        run: find . -maxdepth 1 -type f -name "*.txt" ! -name "raw_*.txt" ! -name "proxies.txt" -delete
+        run: find . -maxdepth 1 -type f -name "*.txt" ! -name "raw_*.txt" ! -name "proxies.txt" -delete
 
       - name: Process proxies for France
         run: |
