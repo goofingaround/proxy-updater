@@ -1,0 +1,33 @@
+name: Update Proxies Every 10m
+
+on:
+  schedule:
+    # runs at minute 0,10,20,30,40,50 of every hour
+    - cron:  '*/10 * * * *'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
+
+    - name: Fetch and reformat proxies
+      run: |
+        RAW="https://raw.githubusercontent.com/zloi-user/hideip.me/refs/heads/master/https.txt"
+        curl -s "$RAW" \
+          | while IFS=':' read -r ip port country; do
+              # uppercase country, remove spaces
+              C=$(echo "$country" | tr '[:lower:] ' '[:upper:]-')
+              echo "http://${ip}:${port}/#${C}1"
+            done \
+          > proxies.txt
+
+    - name: Commit & push
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add proxies.txt
+        git diff --cached --quiet || \
+          (git commit -m "Automated update of proxies.txt" && git push)
