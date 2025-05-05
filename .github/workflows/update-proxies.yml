@@ -26,17 +26,14 @@ jobs:
 
       - name: Merge and process proxies
         run: |
-          # Merge both raw files
           cat raw_https.txt raw_connect.txt > combined_raw.txt
 
-          # Create proxies.txt with format http://IP:PORT/#COUNTRY
           awk -F':' '{
             country = tolower($3)
             gsub(/ /, "-", country)
             printf "http://%s:%s/#%s%d\n", $1, $2, toupper(country), NR
           }' combined_raw.txt > proxies.txt
 
-          # Split into country-specific files
           awk -F':' '
             {
               country = tolower($3)
