@@ -41,11 +41,14 @@ jobs:
         shell: bash
         run: |
           # Remove old country files, but keep raw.txt and proxies.txt
-          find . -maxdepth 1 -type f -name "*.txt" ! -name "raw.txt" ! -name "proxies.txt" -delete
+          for f in *.txt; do
+            if [[ "$f" != "raw.txt" && "$f" != "proxies.txt" ]]; then
+              rm -f "$f"
+            fi
+          done
 
           declare -A count=()
           while IFS=':' read -r ip port country; do
-            # Prepare uppercase tag and lowercase filename
             tag=$(echo "$country" | tr '[:lower:] ' '[:upper:]-')
             file=$(echo "$country" | tr '[:upper:] ' '[:lower:]-').txt
             ((count[$tag]++))
