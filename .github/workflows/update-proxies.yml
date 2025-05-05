@@ -1,18 +1,15 @@
 name: Update Proxies
 
-# Grant the workflow permission to commit & push back to the repo
+# Allow the Action to write back to your repo
 permissions:
   contents: write
 
 on:
-  # Run on every push to main (so you can test instantly)
   push:
     branches:
       - main
-  # Also run every 10 minutes
   schedule:
     - cron: '*/10 * * * *'
-  # Allow manual trigger from the Actions tab
   workflow_dispatch:
 
 jobs:
@@ -23,24 +20,48 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v3
 
-      - name: Fetch and reformat proxies
+      - name: Fetch raw list
         run: |
-          RAW="https://raw.githubusercontent.com/zloi-user/hideip.me/refs/heads/master/https.txt"
-          curl -s "$RAW" \
-            | while IFS=':' read -r ip port country; do
-                # uppercase and replace spaces with hyphens for country
-                C=$(echo "$country" | tr '[:lower:] ' '[:upper:]-')
-                echo "http://${ip}:${port}/#${C}1"
-              done \
-            > proxies.txt
+          RAW_URL="https://raw.githubusercontent.com/zloi-user/hideip.me/refs/heads/master/https.txt"
+          curl -s "$RAW_URL" > raw.txt
 
-          echo "---- proxies.txt content ----"
+      - name: Build combined proxies.txt
+        run: |
+          # same formatting as before
+          awk -F':' '{
+            country=toupper($3); gsub(/ /,"-",country);
+            print "http://"$1":"$2"/#" country "1";
+          }' raw.txt > proxies.txt
+          echo "---- proxies.txt ----"
           cat proxies.txt
+
+      - name: Split out per-country files
+        run: |
+          # remove any old country files
+          rm -f *.txt
+          # for each line, increment counter and append to country file
+          awk -F':' '
+          {
+            # normalize country name
+            c = toupper($3); gsub(/ /,"-",c);
+            # build filename in lowercase, hyphens for spaces
+            f = tolower($3); gsub(/ /,"-",f); f = f".txt";
+            # increment per-country count
+            count[c]++;
+            # emit with incremental #COUNTRYn
+            print "http://"$1":"$2"/#"c count[c] >> f;
+          }
+          ' raw.txt
+          echo "---- generated country files ----"
+          ls *.txt
 
       - name: Commit & push changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          # add raw.txt so we can inspect it (optional)
+          git add raw.txt
           git add proxies.txt
-          # Only commit if there are changes
-          git diff --cached --quiet || (git commit -m "Automated update of proxies.txt" && git push)
+          git add *.txt
+          git diff --cached --quiet || \
+            (git commit -m "Automated update of proxies (combined + per-country)" && git push)
